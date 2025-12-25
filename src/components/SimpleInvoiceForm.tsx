@@ -64,7 +64,7 @@ const SimpleInvoiceForm = () => {
     state: "",
     stateCode: "",
     items: [
-      { id: "1", product: "product name", quantity: 0, unit: "CFT", rate: 0 }
+      { id: "1", product: "", quantity: "" as any, unit: "CFT", rate: "" as any }
     ]
   });
 
@@ -81,9 +81,9 @@ const SimpleInvoiceForm = () => {
     const newItem: InvoiceItem = {
       id: Date.now().toString(),
       product: "",
-      quantity: 0,
+      quantity: "" as any,
       unit: "CFT",
-      rate: 0
+      rate: "" as any
     };
     setFormData(prev => ({
       ...prev,
@@ -131,21 +131,22 @@ const SimpleInvoiceForm = () => {
   };
 
   const generateNewInvoice = () => {
-    setInvoiceCounter(prev => prev + 1);
     setFormData(prev => ({
       ...prev,
       customerName: "",
-      hsn: "",
-      gstin: "N/A",
+      hsn: "25171010",
+      gstin: "",
       vehicleNo: "",
       permitNo: "",
       shippingAddress: "",
-      state: "Jharkhand",
-      stateCode: "20",
-      items: [{ id: Date.now().toString(), product: "", quantity: 0, unit: "CFT", rate: 0 }]
+      state: "",
+      stateCode: "",
+      items: [{ id: Date.now().toString(), product: "", quantity: "" as any, unit: "CFT", rate: "" as any }]
     }));
     setShowPreview(false);
     setIsSaved(false);
+    setViewingInvoice(null);
+    setSelectedAddressId("");
   };
 
   const calculateTotals = () => {
@@ -176,6 +177,9 @@ const SimpleInvoiceForm = () => {
       if (saved) {
         setIsSaved(true);
         setViewingInvoice(saved);
+        // Auto-increment invoice number after successful save
+        const nextCounter = invoiceCounter + 1;
+        setInvoiceCounter(nextCounter);
       }
     } catch (error) {
       console.error('Error saving invoice:', error);
@@ -345,7 +349,7 @@ const SimpleInvoiceForm = () => {
     <div className="min-h-screen bg-gradient-to-br from-background via-accent/10 to-background p-4">
       {/* Header with logout button */}
       <div className="flex justify-between items-center mb-6 max-w-5xl mx-auto">
-        <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+        <h1 className="text-2xl md:text-3xl font-bold text-blue-700 dark:text-blue-400">
           Professional Tax Invoice Generator
         </h1>
         <Button
@@ -361,36 +365,36 @@ const SimpleInvoiceForm = () => {
       
       <div className="max-w-5xl mx-auto">
         {/* Hero Header */}
-        <div className="text-center mb-8 bg-gradient-to-r from-card via-accent/30 to-card backdrop-blur-sm p-8 rounded-3xl shadow-elegant border">
+        <div className="text-center mb-8 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 backdrop-blur-sm p-8 rounded-3xl shadow-lg border border-blue-200 dark:border-blue-700">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="p-3 bg-gradient-to-r from-primary to-primary-glow rounded-2xl shadow-glow">
-              <FileText className="h-8 w-8 text-primary-foreground" />
+            <div className="p-3 bg-gradient-to-r from-blue-600 to-blue-500 rounded-2xl shadow-glow">
+              <FileText className="h-8 w-8 text-white" />
             </div>
-            <h1 className="text-5xl font-bold bg-gradient-to-r from-primary via-primary-glow to-accent-foreground bg-clip-text text-transparent">
+            <h1 className="text-5xl font-bold text-blue-700 dark:text-blue-300">
               Tax Invoice Generator
             </h1>
           </div>
-          <p className="text-muted-foreground text-xl">
-            Create professional GST invoices for any company
+          <p className="text-gray-700 dark:text-gray-300 text-lg font-medium mt-2">
+            Create professional GST invoices for your business
           </p>
-          <div className="flex items-center justify-center gap-6 mt-4 text-sm text-muted-foreground">
+          <div className="flex items-center justify-center gap-6 mt-4 text-sm text-gray-600 dark:text-gray-400">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
+              <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               Welcome to Easy_Work
             </div>
             <div className="flex items-center gap-2">
-              <Calculator className="h-4 w-4 text-primary" />
+              <Calculator className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               Smart Tax Calculations
             </div>
           </div>
         </div>
 
-        <Card className="shadow-elegant border-0 bg-gradient-to-br from-card to-accent/20 backdrop-blur-sm">
-          <CardHeader className="bg-gradient-to-r from-primary/5 to-primary-glow/5 rounded-t-2xl">
+        <Card className="shadow-lg border-2 border-blue-200 dark:border-blue-700 bg-gradient-to-br from-white to-blue-50 dark:from-slate-900 dark:to-blue-900/20 backdrop-blur-sm">
+          <CardHeader className="bg-gradient-to-r from-blue-600 to-blue-500 rounded-t-lg py-6 px-8">
             <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-3 text-2xl">
-                <div className="p-2 bg-primary/10 rounded-xl">
-                  <FileText className="h-6 w-6 text-primary" />
+              <CardTitle className="flex items-center gap-3 text-2xl text-white">
+                <div className="p-2 bg-white/20 rounded-xl">
+                  <FileText className="h-6 w-6 text-white" />
                 </div>
                 Invoice Details
               </CardTitle>

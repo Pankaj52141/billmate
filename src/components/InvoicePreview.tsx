@@ -78,7 +78,7 @@ export const InvoicePreview = ({ invoiceData }: InvoicePreviewProps) => {
         <div className="grid grid-cols-2 gap-6 mb-6">
           {/* Left Column */}
           <div className="space-y-2">
-            <div className="border border-invoice-border">
+            <div className="border border-invoice-border rounded-lg">
               <div className="p-2 border-b border-invoice-border">
                 <span className="text-sm font-medium">Invoice No: </span>
                 <span className="font-semibold">{invoiceNo}</span>
@@ -89,17 +89,17 @@ export const InvoicePreview = ({ invoiceData }: InvoicePreviewProps) => {
               </div>
             </div>
             
-            <div className="border border-invoice-border p-2">
+            <div className="border border-invoice-border rounded-lg p-2">
               <span className="text-sm font-medium">Customer: </span>
               <span className="font-semibold">{customerName}</span>
             </div>
             
-            <div className="border border-invoice-border p-2">
+            <div className="border border-invoice-border rounded-lg p-2">
               <span className="text-sm font-medium">HSN: </span>
               <span className="font-semibold">{hsn}</span>
             </div>
             
-            <div className="border border-invoice-border p-2">
+            <div className="border border-invoice-border rounded-lg p-2">
               <span className="text-sm font-medium">GSTIN: </span>
               <span className="font-semibold">{gstin}</span>
             </div>
@@ -108,17 +108,17 @@ export const InvoicePreview = ({ invoiceData }: InvoicePreviewProps) => {
           {/* Right Column */}
           <div className="space-y-2">
             <div className="grid grid-cols-2 gap-2">
-              <div className="border border-invoice-border p-2">
+              <div className="border border-invoice-border rounded-lg p-2">
                 <span className="text-sm font-medium">Vehicle No: </span>
                 <span className="font-semibold">{vehicleNo}</span>
               </div>
-              <div className="border border-invoice-border p-2">
+              <div className="border border-invoice-border rounded-lg p-2">
                 <span className="text-sm font-medium">Permit No: </span>
                 <span className="font-semibold">{permitNo}</span>
               </div>
             </div>
             
-            <div className="border border-invoice-border p-3">
+            <div className="border border-invoice-border rounded-lg p-3">
               <div className="text-sm font-medium mb-1">Shipping Address:</div>
               <div className="text-sm">{shippingAddress}</div>
             </div>
@@ -127,11 +127,11 @@ export const InvoicePreview = ({ invoiceData }: InvoicePreviewProps) => {
 
         {/* State Info */}
         <div className="grid grid-cols-2 gap-2 mb-6">
-          <div className="border border-invoice-border p-2">
+          <div className="border border-invoice-border rounded-lg p-2">
             <span className="text-sm font-medium">State: </span>
             <span className="font-semibold">{state}</span>
           </div>
-          <div className="border border-invoice-border p-2">
+          <div className="border border-invoice-border rounded-lg p-2">
             <span className="text-sm font-medium">State Code: </span>
             <span className="font-semibold">{stateCode}</span>
           </div>
@@ -143,7 +143,7 @@ export const InvoicePreview = ({ invoiceData }: InvoicePreviewProps) => {
         </div>
 
         {/* Items Table */}
-        <div className="border border-invoice-border mb-6">
+        <div className="border border-invoice-border rounded-lg overflow-hidden mb-6">
           <div className="bg-table-header p-2 border-b border-invoice-border">
             <div className="grid grid-cols-4 gap-4 font-semibold text-sm">
               <span>Product</span>
@@ -168,13 +168,13 @@ export const InvoicePreview = ({ invoiceData }: InvoicePreviewProps) => {
         <div className="mb-6 space-y-2">
           {isJharkhand ? (
             <>
-              <div className="border border-invoice-border p-2">
+              <div className="border border-invoice-border rounded-lg p-2">
                 <div className="flex justify-between">
                   <span className="font-medium">CGST (2.5%):</span>
                   <span className="font-semibold">Rs.{cgst.toFixed(2)}</span>
                 </div>
               </div>
-              <div className="border border-invoice-border p-2">
+              <div className="border border-invoice-border rounded-lg p-2">
                 <div className="flex justify-between">
                   <span className="font-medium">SGST (2.5%):</span>
                   <span className="font-semibold">Rs.{sgst.toFixed(2)}</span>
@@ -182,7 +182,7 @@ export const InvoicePreview = ({ invoiceData }: InvoicePreviewProps) => {
               </div>
             </>
           ) : (
-            <div className="border border-invoice-border p-2">
+            <div className="border border-invoice-border rounded-lg p-2">
               <div className="flex justify-between">
                 <span className="font-medium">IGST (5%):</span>
                 <span className="font-semibold">Rs.{igst.toFixed(2)}</span>
@@ -192,7 +192,7 @@ export const InvoicePreview = ({ invoiceData }: InvoicePreviewProps) => {
         </div>
 
         {/* Total Amount */}
-        <div className="border border-invoice-border p-3 bg-table-header mb-8">
+        <div className="border border-invoice-border rounded-lg p-3 bg-table-header mb-8">
           <div className="flex justify-between items-center">
             <span className="text-lg font-bold">Total Amount:</span>
             <span className="text-xl font-bold">Rs.{totalAmount.toFixed(2)}</span>
