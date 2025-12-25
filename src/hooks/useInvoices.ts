@@ -58,6 +58,23 @@ export const useInvoices = () => {
 
   const saveInvoice = async (invoiceData: SimpleInvoiceData, totals: any) => {
     try {
+      // Check for existing invoice to prevent duplicates
+      const existing = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('company_type', invoiceData.company)
+        .eq('invoice_no', invoiceData.invoiceNo)
+        .limit(1);
+
+      if (existing.error) throw existing.error;
+      if (existing.data && existing.data.length > 0) {
+        toast({
+          title: "Already Saved",
+          description: "This invoice is already in history.",
+        });
+        return existing.data[0];
+      }
+
       const { data, error } = await supabase.from('invoices').insert({
         company_type: invoiceData.company,
         invoice_no: invoiceData.invoiceNo,

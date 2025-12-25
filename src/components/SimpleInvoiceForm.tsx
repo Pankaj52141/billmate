@@ -4,11 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { InvoicePreview } from "./InvoicePreview";
 import { InvoiceHistory } from "./InvoiceHistory";
 import { FileText, Plus, Trash2, RotateCcw, Sparkles, Calculator, Download, FileSpreadsheet, Save, History, LogOut } from "lucide-react";
 import { downloadPDF, exportToExcel } from "@/utils/exportUtils";
 import { useInvoices, StoredInvoice } from "@/hooks/useInvoices";
+import { useAddresses } from "@/hooks/useAddresses";
 import { useToast } from "@/hooks/use-toast";
 
 export interface InvoiceItem {
@@ -36,11 +38,14 @@ export interface SimpleInvoiceData {
 
 const SimpleInvoiceForm = () => {
   const [showPreview, setShowPreview] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [invoiceCounter, setInvoiceCounter] = useState(1);
   const [viewingInvoice, setViewingInvoice] = useState<StoredInvoice | null>(null);
   const { saveInvoice } = useInvoices();
   const { toast } = useToast();
+  const { addresses, saveAddress } = useAddresses();
+  const [selectedAddressId, setSelectedAddressId] = useState<string | "manual" | "">("");
 
   const handleLogout = () => {
     localStorage.removeItem("invoice-passkey");
@@ -106,6 +111,21 @@ const SimpleInvoiceForm = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleSelectSavedAddress = (id: string | "manual") => {
+    setSelectedAddressId(id);
+    if (id === "manual") return;
+    const addr = addresses.find(a => a.id === id);
+    if (!addr) return;
+    setFormData(prev => ({
+      ...prev,
+      shippingAddress: addr.address,
+      state: addr.state || prev.state,
+      stateCode: addr.state_code || prev.stateCode,
+      gstin: addr.gstin || prev.gstin,
+      customerName: addr.customer_name || prev.customerName,
+    }));
+  };
+
   const resetInvoiceNumber = () => {
     setInvoiceCounter(1);
   };
@@ -125,6 +145,7 @@ const SimpleInvoiceForm = () => {
       items: [{ id: Date.now().toString(), product: "", quantity: 0, unit: "CFT", rate: 0 }]
     }));
     setShowPreview(false);
+    setIsSaved(false);
   };
 
   const calculateTotals = () => {
@@ -151,7 +172,11 @@ const SimpleInvoiceForm = () => {
   const handleSaveInvoice = async () => {
     try {
       const totals = { subtotal, cgst, sgst, igst, total };
-      await saveInvoice(formData, totals);
+      const saved = await saveInvoice(formData, totals);
+      if (saved) {
+        setIsSaved(true);
+        setViewingInvoice(saved);
+      }
     } catch (error) {
       console.error('Error saving invoice:', error);
     }
@@ -254,6 +279,7 @@ const SimpleInvoiceForm = () => {
               {!viewingInvoice && (
                 <Button 
                   onClick={handleSaveInvoice}
+                  disabled={isSaved}
                   className="bg-gradient-to-r from-secondary to-secondary/80 hover:shadow-lg transition-all duration-300 flex-shrink-0"
                   size="sm"
                 >
@@ -474,6 +500,47 @@ const SimpleInvoiceForm = () => {
                 </div>
               </div>
 
+              {/* Saved Address Selector */}
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                <div className="space-y-2 md:col-span-2">
+                  <Label className="text-base font-medium">Saved Shipping Address</Label>
+                  <Select value={selectedAddressId ?? ""} onValueChange={(v) => handleSelectSavedAddress(v as any)}>
+                    <SelectTrigger className="h-12">
+                      <SelectValue placeholder="Select a saved address (or choose Manual)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {addresses.map(addr => (
+                        <SelectItem key={addr.id} value={addr.id}>{addr.label}</SelectItem>
+                      ))}
+                      <SelectItem value="manual">Manual Entry</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex md:justify-end">
+                  <Button
+                    variant="outline"
+                    className="h-12"
+                    onClick={async () => {
+                      const saved = await saveAddress({
+                        label: formData.customerName || `Address ${new Date().toLocaleString()}`,
+                        customer_name: formData.customerName || null,
+                        address: formData.shippingAddress,
+                        state: formData.state || null,
+                        state_code: formData.stateCode || null,
+                        gstin: formData.gstin || null,
+                      });
+                      if (saved) {
+                        toast({ title: "Saved", description: "Address stored. Select it next time." });
+                        setSelectedAddressId(saved.id);
+                      }
+                    }}
+                    disabled={!formData.shippingAddress}
+                  >
+                    Save This Address
+                  </Button>
+                </div>
+              </div>
+
               <div className="mt-6 space-y-2">
                 <Label htmlFor="shippingAddress" className="text-base font-medium">Shipping Address</Label>
                 <Textarea
@@ -639,6 +706,7 @@ const SimpleInvoiceForm = () => {
                 </Button>
                 <Button 
                   onClick={handleSaveInvoice}
+                  disabled={isSaved}
                   variant="outline"
                   className="hover:bg-secondary/10 hover:border-secondary hover:text-secondary transition-all duration-300"
                 >
@@ -656,14 +724,7 @@ const SimpleInvoiceForm = () => {
               </div>
             </div>
 
-            <Button 
-              onClick={() => setShowPreview(true)} 
-              className="w-full h-14 text-lg bg-gradient-to-r from-primary to-primary-glow hover:shadow-glow transition-all duration-300"
-              size="lg"
-            >
-              <FileText className="h-5 w-5 mr-3" />
-              Generate Invoice Preview
-            </Button>
+            {/* Removed duplicate full-width preview button for cleaner UX */}
           </CardContent>
         </Card>
       </div>

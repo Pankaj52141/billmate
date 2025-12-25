@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      addresses: {
+        Row: {
+          id: string
+          label: string
+          customer_name: string | null
+          address: string
+          state: string | null
+          state_code: string | null
+          gstin: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          label: string
+          customer_name?: string | null
+          address: string
+          state?: string | null
+          state_code?: string | null
+          gstin?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          label?: string
+          customer_name?: string | null
+          address?: string
+          state?: string | null
+          state_code?: string | null
+          gstin?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       contact_messages: {
         Row: {
           created_at: string

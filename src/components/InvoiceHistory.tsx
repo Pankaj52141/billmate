@@ -49,6 +49,13 @@ export const InvoiceHistory = ({ onViewInvoice }: InvoiceHistoryProps) => {
     ? invoices 
     : invoices.filter(invoice => invoice.company_type === companyFilter);
 
+  // De-duplicate by company + invoice number to avoid repeats
+  const uniqueInvoices = filteredInvoices.filter((inv, idx, arr) => {
+    const key = `${inv.company_type}|${inv.invoice_no}`;
+    const firstIndex = arr.findIndex(i => `${i.company_type}|${i.invoice_no}` === key);
+    return firstIndex === idx;
+  });
+
   const handleDelete = async (id: string) => {
     await deleteInvoice(id);
   };
@@ -149,7 +156,7 @@ export const InvoiceHistory = ({ onViewInvoice }: InvoiceHistoryProps) => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building className="h-5 w-5 text-primary" />
-              Saved Invoices ({filteredInvoices.length})
+              Saved Invoices ({uniqueInvoices.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -157,7 +164,7 @@ export const InvoiceHistory = ({ onViewInvoice }: InvoiceHistoryProps) => {
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
-            ) : filteredInvoices.length === 0 ? (
+            ) : uniqueInvoices.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <History className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p className="text-lg">No invoices found</p>
@@ -177,7 +184,7 @@ export const InvoiceHistory = ({ onViewInvoice }: InvoiceHistoryProps) => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredInvoices.map((invoice) => (
+                    {uniqueInvoices.map((invoice) => (
                       <TableRow key={invoice.id} className="hover:bg-muted/30 transition-colors">
                         <TableCell className="font-medium">
                           {invoice.invoice_no}
