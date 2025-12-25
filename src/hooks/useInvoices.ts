@@ -56,28 +56,39 @@ export const useInvoices = () => {
     }
   };
 
+  // Get next invoice number for a company (format: INV/0001)
+  const getNextInvoiceNo = async (companyType: string): Promise<string> => {
+    const { data, error } = await supabase
+      .from('invoices')
+      .select('invoice_no, created_at')
+      .eq('company_type', companyType)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.error('Error fetching last invoice:', error);
+      // fallback to first invoice number
+      return 'INV/0001';
+    }
+
+    if (!data || data.length === 0) {
+      return 'INV/0001';
+    }
+
+    const last = data[0]?.invoice_no || 'INV/0000';
+    const match = /^(.*?)(\d+)$/.exec(last.replace(/[^0-9]+(\d+)/, '$1'));
+    // Simple parse for INV/0001 pattern
+    const numeric = parseInt((last.split('/')[1] || '0').replace(/[^0-9]/g, ''), 10) || 0;
+    const next = numeric + 1;
+    const padded = next.toString().padStart(4, '0');
+    return `INV/${padded}`;
+  };
+
   const saveInvoice = async (invoiceData: SimpleInvoiceData, totals: any) => {
     try {
-      // Check for existing invoice to prevent duplicates
-      const existing = await supabase
-        .from('invoices')
-        .select('*')
-        .eq('company_type', invoiceData.company)
-        .eq('invoice_no', invoiceData.invoiceNo)
-        .limit(1);
-
-      if (existing.error) throw existing.error;
-      if (existing.data && existing.data.length > 0) {
-        toast({
-          title: "Already Saved",
-          description: "This invoice is already in history.",
-        });
-        return existing.data[0];
-      }
-
-      const { data, error } = await supabase.from('invoices').insert({
+      const buildPayload = (invoiceNo: string) => ({
         company_type: invoiceData.company,
-        invoice_no: invoiceData.invoiceNo,
+        invoice_no: invoiceNo,
         invoice_date: invoiceData.invoiceDate,
         customer_name: invoiceData.customerName,
         hsn: invoiceData.hsn,
@@ -93,16 +104,39 @@ export const useInvoices = () => {
         sgst: totals.sgst || null,
         igst: totals.igst || null,
         total_amount: totals.total
-      }).select();
+      });
 
-      if (error) throw error;
+      // First try with provided invoice number, else compute next
+      let desiredNo = invoiceData.invoiceNo && invoiceData.invoiceNo.trim() ? invoiceData.invoiceNo : await getNextInvoiceNo(invoiceData.company);
+
+      const tryInsert = async (no: string) => {
+        return await supabase.from('invoices').insert(buildPayload(no)).select();
+      };
+
+      let insertResult = await tryInsert(desiredNo);
+      if (insertResult.error) {
+        const code = (insertResult.error as any).code;
+        const message = insertResult.error.message || '';
+        // Unique violation or duplicate: compute next and retry once
+        if (code === '23505' || /unique|duplicate/i.test(message)) {
+          const nextNo = await getNextInvoiceNo(invoiceData.company);
+          // Avoid infinite retry if same
+          if (nextNo !== desiredNo) {
+            insertResult = await tryInsert(nextNo);
+          }
+        }
+      }
+
+      if (insertResult.error) throw insertResult.error;
+
+      const data = insertResult.data as any[];
 
       toast({
         title: "Success",
         description: "Invoice saved successfully!",
       });
 
-      return data[0];
+      return data[0] as StoredInvoice;
     } catch (error) {
       console.error('Error saving invoice:', error);
       toast({
@@ -145,6 +179,7 @@ export const useInvoices = () => {
     invoices,
     loading,
     saveInvoice,
+    getNextInvoiceNo,
     deleteInvoice,
     fetchInvoices,
     refetch: fetchInvoices

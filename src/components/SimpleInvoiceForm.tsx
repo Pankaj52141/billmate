@@ -7,11 +7,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { InvoicePreview } from "./InvoicePreview";
 import { InvoiceHistory } from "./InvoiceHistory";
-import { FileText, Plus, Trash2, RotateCcw, Sparkles, Calculator, Download, FileSpreadsheet, Save, History, LogOut, X } from "lucide-react";
+import { FileText, Plus, Trash2, RotateCcw, Sparkles, Calculator, Download, FileSpreadsheet, Save, History, LogOut, X, Loader2 } from "lucide-react";
 import { downloadPDF, exportToExcel } from "@/utils/exportUtils";
 import { useInvoices, StoredInvoice } from "@/hooks/useInvoices";
 import { useAddresses } from "@/hooks/useAddresses";
 import { useToast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export interface InvoiceItem {
   id: string;
@@ -39,10 +40,13 @@ export interface SimpleInvoiceData {
 const SimpleInvoiceForm = () => {
   const [showPreview, setShowPreview] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [invoiceCounter, setInvoiceCounter] = useState(1);
   const [viewingInvoice, setViewingInvoice] = useState<StoredInvoice | null>(null);
-  const { saveInvoice } = useInvoices();
+  const { saveInvoice, getNextInvoiceNo } = useInvoices();
   const { toast } = useToast();
   const { addresses, saveAddress, deleteAddress } = useAddresses();
   const [selectedAddressId, setSelectedAddressId] = useState<string | "manual" | "">("");
@@ -68,7 +72,7 @@ const SimpleInvoiceForm = () => {
     ]
   });
 
-  // Auto-generate invoice number
+  // Auto-generate invoice number from counter
   useEffect(() => {
     const paddedNumber = invoiceCounter.toString().padStart(4, '0');
     setFormData(prev => ({
@@ -76,6 +80,21 @@ const SimpleInvoiceForm = () => {
       invoiceNo: `INV/${paddedNumber}`
     }));
   }, [invoiceCounter]);
+
+  // Initialize invoice number from backend when company changes or on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const nextNo = await getNextInvoiceNo(formData.company);
+        const numeric = parseInt((nextNo.split('/')[1] || '1').replace(/[^0-9]/g, ''), 10) || 1;
+        setInvoiceCounter(numeric);
+        setFormData(prev => ({ ...prev, invoiceNo: nextNo }));
+      } catch (e) {
+        // fallback keeps current counter
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.company]);
 
   const addItem = () => {
     const newItem: InvoiceItem = {
@@ -126,8 +145,16 @@ const SimpleInvoiceForm = () => {
     }));
   };
 
-  const resetInvoiceNumber = () => {
-    setInvoiceCounter(1);
+  const resetInvoiceNumber = async () => {
+    try {
+      const nextNo = await getNextInvoiceNo(formData.company);
+      const numeric = parseInt((nextNo.split('/')[1] || '1').replace(/[^0-9]/g, ''), 10) || 1;
+      setInvoiceCounter(numeric);
+      setFormData(prev => ({ ...prev, invoiceNo: nextNo }));
+    } catch {
+      setInvoiceCounter(1);
+      setFormData(prev => ({ ...prev, invoiceNo: 'INV/0001' }));
+    }
   };
 
   const generateNewInvoice = () => {
@@ -172,17 +199,27 @@ const SimpleInvoiceForm = () => {
 
   const handleSaveInvoice = async () => {
     try {
+      setIsSaving(true);
       const totals = { subtotal, cgst, sgst, igst, total };
       const saved = await saveInvoice(formData, totals);
       if (saved) {
         setIsSaved(true);
         setViewingInvoice(saved);
+        // sync invoice number in case it advanced due to duplicate
+        if (saved.invoice_no && saved.invoice_no !== formData.invoiceNo) {
+          const numeric = parseInt((saved.invoice_no.split('/')[1] || '1').replace(/[^0-9]/g, ''), 10) || invoiceCounter + 1;
+          setInvoiceCounter(numeric);
+          setFormData(prev => ({ ...prev, invoiceNo: saved.invoice_no }));
+        }
         // Auto-increment invoice number after successful save
         const nextCounter = invoiceCounter + 1;
         setInvoiceCounter(nextCounter);
       }
     } catch (error) {
       console.error('Error saving invoice:', error);
+    }
+    finally {
+      setIsSaving(false);
     }
   };
 
@@ -197,6 +234,7 @@ const SimpleInvoiceForm = () => {
     }
     
     try {
+      setIsDownloading(true);
       await downloadPDF('invoice-preview', `${formData.invoiceNo.replace('/', '_')}_${formData.customerName.replace(/\s+/g, '_')}.pdf`);
       toast({
         title: "Success",
@@ -209,6 +247,9 @@ const SimpleInvoiceForm = () => {
         description: "Failed to download PDF",
         variant: "destructive"
       });
+    }
+    finally {
+      setIsDownloading(false);
     }
   };
 
@@ -223,6 +264,7 @@ const SimpleInvoiceForm = () => {
     }
     
     try {
+      setIsExporting(true);
       const totals = { subtotal, cgst, sgst, igst, total };
       exportToExcel(formData, totals);
       toast({
@@ -236,6 +278,9 @@ const SimpleInvoiceForm = () => {
         description: "Failed to export to Excel",
         variant: "destructive"
       });
+    }
+    finally {
+      setIsExporting(false);
     }
   };
 
@@ -278,17 +323,25 @@ const SimpleInvoiceForm = () => {
               <p className="text-muted-foreground mt-1">Review your professional invoice</p>
             </div>
             <div className="flex flex-wrap gap-2 md:gap-3">
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setShowPreview(false);
-                  setViewingInvoice(null);
-                }}
-                className="hover:bg-accent transition-all duration-300 flex-shrink-0"
-                size="sm"
-              >
-                {viewingInvoice ? 'Back to History' : 'Edit Invoice'}
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setShowPreview(false);
+                        setViewingInvoice(null);
+                      }}
+                      className="hover:bg-accent transition-all duration-300 flex-shrink-0"
+                      size="sm"
+                      aria-label={viewingInvoice ? 'Back to History' : 'Edit Invoice'}
+                    >
+                      {viewingInvoice ? 'Back to History' : 'Edit Invoice'}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Edit invoice details</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <Button 
                 variant="outline"
                 onClick={() => setShowHistory(true)}
@@ -299,32 +352,58 @@ const SimpleInvoiceForm = () => {
                 <span className="hidden sm:inline">View </span>History
               </Button>
               {!viewingInvoice && (
-                <Button 
-                  onClick={handleSaveInvoice}
-                  disabled={isSaved}
-                  className="bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:shadow-lg hover:from-blue-700 hover:to-blue-600 transition-all duration-300 flex-shrink-0"
-                  size="sm"
-                >
-                  <Save className="h-4 w-4 mr-1 md:mr-2" />
-                  <span className="hidden sm:inline">Save </span>Invoice
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        onClick={handleSaveInvoice}
+                        disabled={isSaved || isSaving}
+                        className="bg-[linear-gradient(90deg,hsl(var(--primary)),hsl(var(--primary-glow)))] text-white hover:shadow-lg transition-all duration-300 flex-shrink-0"
+                        size="sm"
+                        aria-label="Save Invoice"
+                      >
+                        {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-1 md:mr-2" />}
+                        {isSaving ? 'Saving...' : (<><span className="hidden sm:inline">Save </span>Invoice</>)}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Save before exporting</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
-              <Button 
-                onClick={handleDownloadPDF}
-                className="bg-gradient-to-r from-success to-success/80 hover:shadow-lg transition-all duration-300 flex-shrink-0"
-                size="sm"
-              >
-                <Download className="h-4 w-4 mr-1 md:mr-2" />
-                <span className="hidden sm:inline">Download </span>PDF
-              </Button>
-              <Button 
-                onClick={handleExportExcel}
-                className="bg-gradient-to-r from-primary to-primary-glow hover:shadow-glow transition-all duration-300 flex-shrink-0"
-                size="sm"
-              >
-                <FileSpreadsheet className="h-4 w-4 mr-1 md:mr-2" />
-                <span className="hidden sm:inline">Export </span>Excel
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      onClick={handleDownloadPDF}
+                      disabled={(!isSaved && !viewingInvoice) || isDownloading}
+                      className="bg-gradient-to-r from-success to-success/80 hover:shadow-lg transition-all duration-300 flex-shrink-0"
+                      size="sm"
+                      aria-label="Download PDF"
+                    >
+                      {isDownloading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-1 md:mr-2" />}
+                      {isDownloading ? 'Downloading...' : (<><span className="hidden sm:inline">Download </span>PDF</>)}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Save first to enable</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      onClick={handleExportExcel}
+                      disabled={(!isSaved && !viewingInvoice) || isExporting}
+                      className="bg-gradient-to-r from-primary to-primary-glow hover:shadow-glow transition-all duration-300 flex-shrink-0"
+                      size="sm"
+                      aria-label="Export Excel"
+                    >
+                      {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileSpreadsheet className="h-4 w-4 mr-1 md:mr-2" />}
+                      {isExporting ? 'Exporting...' : (<><span className="hidden sm:inline">Export </span>Excel</>)}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Save first to enable</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               {!viewingInvoice && (
                 <Button 
                   onClick={generateNewInvoice}
@@ -349,7 +428,7 @@ const SimpleInvoiceForm = () => {
     <div className="min-h-screen bg-gradient-to-br from-background via-accent/10 to-background p-4">
       {/* Header with logout button */}
       <div className="flex justify-between items-center mb-6 max-w-5xl mx-auto">
-        <h1 className="text-2xl md:text-3xl font-bold text-blue-700 dark:text-blue-400">
+        <h1 className="text-2xl md:text-3xl font-bold text-primary">
           Professional Tax Invoice Generator
         </h1>
         <Button
@@ -365,12 +444,12 @@ const SimpleInvoiceForm = () => {
       
       <div className="max-w-5xl mx-auto">
         {/* Hero Header */}
-        <div className="text-center mb-8 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 backdrop-blur-sm p-8 rounded-3xl shadow-lg border border-blue-200 dark:border-blue-700">
+        <div className="text-center mb-8 bg-[radial-gradient(1200px_600px_at_0%_-20%,hsl(var(--primary)/0.08),transparent),radial-gradient(1000px_600px_at_100%_120%,hsl(var(--primary-glow)/0.08),transparent)] backdrop-blur-sm p-8 rounded-3xl shadow-elegant border border-border/60">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="p-3 bg-gradient-to-r from-blue-600 to-blue-500 rounded-2xl shadow-glow">
+            <div className="p-3 bg-[linear-gradient(90deg,hsl(var(--primary)),hsl(var(--primary-glow)))] rounded-2xl shadow-glow">
               <FileText className="h-8 w-8 text-white" />
             </div>
-            <h1 className="text-5xl font-bold text-blue-700 dark:text-blue-300">
+            <h1 className="text-5xl font-bold text-foreground">
               Tax Invoice Generator
             </h1>
           </div>
@@ -379,18 +458,18 @@ const SimpleInvoiceForm = () => {
           </p>
           <div className="flex items-center justify-center gap-6 mt-4 text-sm text-gray-600 dark:text-gray-400">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <Sparkles className="h-4 w-4 text-primary" />
               Welcome to Easy_Work
             </div>
             <div className="flex items-center gap-2">
-              <Calculator className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <Calculator className="h-4 w-4 text-primary" />
               Smart Tax Calculations
             </div>
           </div>
         </div>
 
-        <Card className="shadow-lg border-2 border-blue-200 dark:border-blue-700 bg-gradient-to-br from-white to-blue-50 dark:from-slate-900 dark:to-blue-900/20 backdrop-blur-sm">
-          <CardHeader className="bg-gradient-to-r from-blue-600 to-blue-500 rounded-t-lg py-6 px-8">
+        <Card className="shadow-elegant border border-border/60 bg-gradient-to-br from-card to-accent/20 backdrop-blur-sm">
+          <CardHeader className="bg-[linear-gradient(90deg,hsl(var(--primary)),hsl(var(--primary-glow)))] rounded-t-lg py-6 px-8">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-3 text-2xl text-white">
                 <div className="p-2 bg-white/20 rounded-xl">
@@ -417,8 +496,8 @@ const SimpleInvoiceForm = () => {
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Reset Counter
                 </Button>
-                <div className="px-4 py-2 bg-primary/10 rounded-lg border border-primary/20">
-                  <span className="text-sm font-medium text-primary">
+                <div className="px-4 py-2 bg-muted/50 rounded-lg border border-border/40">
+                  <span className="text-sm font-medium text-muted-foreground">
                     Invoice: {formData.invoiceNo}
                   </span>
                 </div>
@@ -749,21 +828,37 @@ const SimpleInvoiceForm = () => {
             {/* Action Buttons */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex gap-3">
-                <Button 
-                  onClick={() => setShowPreview(true)}
-                  className="bg-gradient-to-r from-primary to-primary-glow hover:shadow-glow transition-all duration-300"
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Preview Invoice
-                </Button>
-                <Button 
-                  onClick={handleSaveInvoice}
-                  disabled={isSaved}
-                  className="bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300"
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Invoice
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        onClick={() => setShowPreview(true)}
+                        className="bg-gradient-to-r from-primary to-primary-glow hover:shadow-glow transition-all duration-300"
+                        aria-label="Preview Invoice"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Preview Invoice
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Open a printable preview</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        onClick={handleSaveInvoice}
+                        disabled={isSaved || isSaving}
+                        className="bg-[linear-gradient(90deg,hsl(var(--primary)),hsl(var(--primary-glow)))] text-white transition-all duration-300"
+                        aria-label="Save Invoice"
+                      >
+                        {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                        {isSaving ? 'Saving...' : 'Save Invoice'}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Save to enable export</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
               <div className="text-right">
                 <div className="text-2xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
@@ -773,6 +868,43 @@ const SimpleInvoiceForm = () => {
                   Subtotal: ₹{subtotal.toLocaleString()} | Tax: ₹{(cgst + sgst + igst).toFixed(2)}
                 </div>
               </div>
+            </div>
+
+            {/* Export Actions under totals for quick access when saved */}
+            <div className="flex flex-wrap gap-3 justify-end">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      onClick={handleDownloadPDF}
+                      disabled={(!isSaved && !viewingInvoice) || isDownloading}
+                      variant="outline"
+                      aria-label="Download PDF"
+                    >
+                      {isDownloading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+                      {isDownloading ? 'Downloading...' : 'Download PDF'}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Save first to enable</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      onClick={handleExportExcel}
+                      disabled={(!isSaved && !viewingInvoice) || isExporting}
+                      variant="outline"
+                      aria-label="Export Excel"
+                    >
+                      {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileSpreadsheet className="h-4 w-4 mr-2" />}
+                      {isExporting ? 'Exporting...' : 'Export Excel'}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Save first to enable</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
 
             {/* Removed duplicate full-width preview button for cleaner UX */}
