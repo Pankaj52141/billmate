@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { InvoicePreview } from "./InvoicePreview";
 import { InvoiceHistory } from "./InvoiceHistory";
-import { FileText, Plus, Trash2, RotateCcw, Sparkles, Calculator, Download, FileSpreadsheet, Save, History, LogOut } from "lucide-react";
+import { FileText, Plus, Trash2, RotateCcw, Sparkles, Calculator, Download, FileSpreadsheet, Save, History, LogOut, X } from "lucide-react";
 import { downloadPDF, exportToExcel } from "@/utils/exportUtils";
 import { useInvoices, StoredInvoice } from "@/hooks/useInvoices";
 import { useAddresses } from "@/hooks/useAddresses";
@@ -44,7 +44,7 @@ const SimpleInvoiceForm = () => {
   const [viewingInvoice, setViewingInvoice] = useState<StoredInvoice | null>(null);
   const { saveInvoice } = useInvoices();
   const { toast } = useToast();
-  const { addresses, saveAddress } = useAddresses();
+  const { addresses, saveAddress, deleteAddress } = useAddresses();
   const [selectedAddressId, setSelectedAddressId] = useState<string | "manual" | "">("");
 
   const handleLogout = () => {
@@ -183,6 +183,15 @@ const SimpleInvoiceForm = () => {
   };
 
   const handleDownloadPDF = async () => {
+    if (!isSaved && !viewingInvoice) {
+      toast({
+        title: "Save Required",
+        description: "Please save the invoice first before downloading PDF.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     try {
       await downloadPDF('invoice-preview', `${formData.invoiceNo.replace('/', '_')}_${formData.customerName.replace(/\s+/g, '_')}.pdf`);
       toast({
@@ -200,6 +209,15 @@ const SimpleInvoiceForm = () => {
   };
 
   const handleExportExcel = () => {
+    if (!isSaved && !viewingInvoice) {
+      toast({
+        title: "Save Required",
+        description: "Please save the invoice first before exporting to Excel.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     try {
       const totals = { subtotal, cgst, sgst, igst, total };
       exportToExcel(formData, totals);
@@ -280,7 +298,7 @@ const SimpleInvoiceForm = () => {
                 <Button 
                   onClick={handleSaveInvoice}
                   disabled={isSaved}
-                  className="bg-gradient-to-r from-secondary to-secondary/80 hover:shadow-lg transition-all duration-300 flex-shrink-0"
+                  className="bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:shadow-lg hover:from-blue-700 hover:to-blue-600 transition-all duration-300 flex-shrink-0"
                   size="sm"
                 >
                   <Save className="h-4 w-4 mr-1 md:mr-2" />
@@ -501,44 +519,74 @@ const SimpleInvoiceForm = () => {
               </div>
 
               {/* Saved Address Selector */}
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-                <div className="space-y-2 md:col-span-2">
-                  <Label className="text-base font-medium">Saved Shipping Address</Label>
-                  <Select value={selectedAddressId ?? ""} onValueChange={(v) => handleSelectSavedAddress(v as any)}>
-                    <SelectTrigger className="h-12">
-                      <SelectValue placeholder="Select a saved address (or choose Manual)" />
-                    </SelectTrigger>
-                    <SelectContent>
+              <div className="mt-6 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                  <div className="space-y-2 md:col-span-2">
+                    <Label className="text-base font-medium">Saved Shipping Address</Label>
+                    <Select value={selectedAddressId ?? ""} onValueChange={(v) => handleSelectSavedAddress(v as any)}>
+                      <SelectTrigger className="h-12">
+                        <SelectValue placeholder="Select a saved address (or choose Manual)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {addresses.map(addr => (
+                          <SelectItem key={addr.id} value={addr.id}>{addr.label}</SelectItem>
+                        ))}
+                        <SelectItem value="manual">Manual Entry</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex md:justify-end">
+                    <Button
+                      variant="outline"
+                      className="h-12 hover:bg-primary/10 hover:border-primary hover:text-primary transition-all"
+                      onClick={async () => {
+                        const saved = await saveAddress({
+                          label: formData.customerName || `Address ${new Date().toLocaleString()}`,
+                          customer_name: formData.customerName || null,
+                          address: formData.shippingAddress,
+                          state: formData.state || null,
+                          state_code: formData.stateCode || null,
+                          gstin: formData.gstin || null,
+                        });
+                        if (saved) {
+                          toast({ title: "Saved", description: "Address stored. Select it next time." });
+                          setSelectedAddressId(saved.id);
+                        }
+                      }}
+                      disabled={!formData.shippingAddress}
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      Save This Address
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Manage Saved Addresses */}
+                {addresses.length > 0 && (
+                  <div className="bg-muted/30 rounded-xl p-4 space-y-2">
+                    <Label className="text-sm font-medium text-muted-foreground">Manage Saved Addresses</Label>
+                    <div className="flex flex-wrap gap-2">
                       {addresses.map(addr => (
-                        <SelectItem key={addr.id} value={addr.id}>{addr.label}</SelectItem>
+                        <div key={addr.id} className="flex items-center gap-1 bg-card border rounded-lg px-3 py-2 text-sm hover:shadow-md transition-all">
+                          <span className="font-medium">{addr.label}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 ml-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={async () => {
+                              if (selectedAddressId === addr.id) {
+                                setSelectedAddressId("");
+                              }
+                              await deleteAddress(addr.id);
+                            }}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
                       ))}
-                      <SelectItem value="manual">Manual Entry</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex md:justify-end">
-                  <Button
-                    variant="outline"
-                    className="h-12"
-                    onClick={async () => {
-                      const saved = await saveAddress({
-                        label: formData.customerName || `Address ${new Date().toLocaleString()}`,
-                        customer_name: formData.customerName || null,
-                        address: formData.shippingAddress,
-                        state: formData.state || null,
-                        state_code: formData.stateCode || null,
-                        gstin: formData.gstin || null,
-                      });
-                      if (saved) {
-                        toast({ title: "Saved", description: "Address stored. Select it next time." });
-                        setSelectedAddressId(saved.id);
-                      }
-                    }}
-                    disabled={!formData.shippingAddress}
-                  >
-                    Save This Address
-                  </Button>
-                </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 space-y-2">
@@ -707,8 +755,7 @@ const SimpleInvoiceForm = () => {
                 <Button 
                   onClick={handleSaveInvoice}
                   disabled={isSaved}
-                  variant="outline"
-                  className="hover:bg-secondary/10 hover:border-secondary hover:text-secondary transition-all duration-300"
+                  className="bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300"
                 >
                   <Save className="h-4 w-4 mr-2" />
                   Save Invoice

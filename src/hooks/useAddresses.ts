@@ -64,7 +64,24 @@ export const useAddresses = () => {
     }
   };
 
+  const deleteAddress = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('addresses')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      toast({ title: 'Deleted', description: 'Address removed successfully.' });
+      await fetchAddresses();
+      return true;
+    } catch (error) {
+      console.error('Error deleting address:', error);
+      toast({ title: 'Error', description: 'Failed to delete address', variant: 'destructive' });
+      return false;
+    }
+  };
+
   useEffect(() => { fetchAddresses(); }, []);
 
-  return { addresses, loading, fetchAddresses, saveAddress };
+  return { addresses, loading, fetchAddresses, saveAddress, deleteAddress };
 };
